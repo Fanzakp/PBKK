@@ -2,46 +2,93 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
     public function index()
     {
-        // Logika untuk menampilkan daftar produk
-        return view('products.index');
+        $products = Product::latest()->paginate(10);
+        return view('products.index', compact('products'));
     }
 
     public function create()
     {
-        // Logika untuk menampilkan form pembuatan produk
         return view('products.create');
     }
 
     public function store(Request $request)
     {
-        // Logika untuk menyimpan produk baru
+        Log::info('Store method called');
+        $request->validate([
+            'name' => 'required',
+            'description' => 'required',
+            'price' => 'required|numeric',
+            'stock' => 'required|integer',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+        ]);
+
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('images', 'public');
+        }
+
+        Product::create([
+            'name' => $request->name,
+            'description' => $request->description,
+            'price' => $request->price,
+            'stock' => $request->stock,
+            'image_url' => $imagePath,
+        ]);
+
+        return redirect()->route('products.index')
+            ->with('success', 'Product created successfully.');
     }
 
-    public function show($id)
+    public function show(Product $product)
     {
-        // Logika untuk menampilkan detail produk
-        return view('products.show');
+        return view('products.show', compact('product'));
     }
 
-    public function edit($id)
+    public function edit(Product $product)
     {
-        // Logika untuk menampilkan form edit produk
-        return view('products.edit');
+        return view('products.edit', compact('product'));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, Product $product)
     {
-        // Logika untuk mengupdate produk
+        $request->validate([
+            'name' => 'required',
+            'description' => 'required',
+            'price' => 'required|numeric',
+            'stock' => 'required|integer',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+        ]);
+
+        // Cek apakah ada gambar baru yang diupload
+        if ($request->file('image')) {
+            $imagePath = $request->file('image')->store('images', 'public');
+            $product->image_url = $imagePath; // update image path
+        }
+
+        $product->update([
+            'name' => $request->name,
+            'description' => $request->description,
+            'price' => $request->price,
+            'stock' => $request->stock,
+        ]);
+
+        return redirect()->route('products.index')
+            ->with('success', 'Product updated successfully');
     }
 
-    public function destroy($id)
+    public function destroy(Product $product)
     {
-        // Logika untuk menghapus produk
+        $product->delete();
+
+        return redirect()->route('products.index')
+            ->with('success', 'Product deleted successfully');
     }
 }

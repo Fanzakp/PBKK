@@ -2,42 +2,88 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests; // Add this if not already present
 use Illuminate\Http\Request;
+use App\Models\Order;
+use App\Models\OrderItem;
 
 class OrderController extends Controller
 {
+    use AuthorizesRequests; // This ensures that the authorize method is available
+
     public function index()
     {
-        return view('orders.index');
+        $this->authorize('viewAny', Order::class); // Ensure there's a policy for Order model
+        $orders = Order::with('user')->latest()->paginate(10);
+        return view('orders.index', compact('orders'));
     }
 
     public function create()
     {
-        return view('orders.create');
+        $cartItems = session()->get('cart', []);
+        $total = 0;
+        foreach ($cartItems as $item) {
+            $total += $item['price'] * $item['quantity'];
+        }
+        return view('orders.checkout', compact('cartItems', 'total'));
     }
 
     public function store(Request $request)
     {
-        // Logika untuk menyimpan order baru
+        $request->validate([
+            'shipping_address' => 'required|string',
+            'payment_method' => 'required|in:credit_card,bank_transfer',
+        ]);
+
+        $order = Order::create([
+            'user_id' => auth()->id(),
+            'total_amount' => $request->total_amount,
+            'shipping_address' => $request->shipping_address,
+            'payment_method' => $request->payment_method,
+            'status' => 'pending',
+        ]);
+
+        $cartItems = session()->get('cart', []);
+        foreach ($cartItems as $id => $details) {
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $id,
+                'quantity' => $details['quantity'],
+                'price' => $details['price'],
+            ]);
+        }
+
+        session()->forget('cart');
+
+        return redirect()->route('orders.confirmation', $order)->with('success', 'Order placed successfully!');
     }
 
-    public function show($id)
+    public function show(Order $order)
     {
-        return view('orders.show');
+        $this->authorize('view', $order);
+        return view('orders.show', compact('order'));
     }
 
-    public function edit($id)
+    public function confirmation(Order $order)
     {
-        return view('orders.edit');
+        if ($order->user_id !== auth()->id()) {
+            abort(403);
+        }
+        return view('orders.confirmation', compact('order'));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, Order $order)
     {
-        // Logika untuk mengupdate order
-    }
+        $this->authorize('update', $order);
+        
+        $request->validate([
+            'status' => 'required|in:pending,processing,shipped,delivered,cancelled',
+        ]);
 
-    public function destroy($id)
-    {
-        // Logika untuk menghapus order
+        $order->update([
+            'status' => $request->status,
+        ]);
+
+        return redirect()->route('orders.show', $order)->with('success', 'Order status updated successfully.');
     }
 }

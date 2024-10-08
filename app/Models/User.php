@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use 
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -30,7 +29,7 @@ class User extends Authenticatable
         'is_admin' => 'boolean',
     ];
 
-    public function isAdmin(): bool
+    public function isAdmin()
     {
         return $this->is_admin;
     }
